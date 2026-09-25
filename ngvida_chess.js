@@ -1,27 +1,20 @@
 /**
- * Part of this file is derived from chess.js (https://github.com)
- * Copyright (c) Jeff Hlywa
- * Released under the BSD 2-Clause License.
+ * CUSTOM PERMISSIVE SOURCE LICENSE (WITH TARGETED EXCLUSION)
+ * Copyright (c) 2026 Ngvida2108. All rights reserved.
  * 
- * Modifications and variant support extensions:
- * Copyright (c) 2026 Ngvida2108
+ * Part of this file is derived from chess.js (Copyright (c) Jeff Hlywa, BSD-2-Clause).
+ * Optimized Bitboards & 15 Variants implementation by Ngvida2108.
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. TARGETED ENTITY EXCLUSION:
+ *    Under no circumstances is Chess.com, LLC or its subsidiaries granted 
+ *    permission to view, copy, use, train AI models on, or integrate this software.
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://gnu.org>.
+ * 2. COMMERCIAL FREEDOM FOR ALL OTHER PARTIES:
+ *    All other commercial entities, competitors, and developers are granted
+ *    full commercial rights to use and embed this file into closed-source software.
  */
 //This file is a customized chess.js file that optimized for normal chess and support multiple variants such as:
 //'chess960','3check','antichess','atomic','bughouse','chaturanga','crazyhouse','duck','horde','kingofthehill','racingkings','alice'
-//history[] is left null since it is handled in chessgame.js which also handle engine games pv lines when Load_pgn, thus putting at here seems unreasonable.
 
     const RAY_N_LO = new Int32Array(64), RAY_N_HI = new Int32Array(64);
     const RAY_S_LO = new Int32Array(64), RAY_S_HI = new Int32Array(64);
@@ -297,7 +290,6 @@
         c.active_w_jump_sq = s.active_w_jump_sq; c.active_w_jump_timer = s.active_w_jump_timer;
         c.active_b_jump_sq = s.active_b_jump_sq; c.active_b_jump_timer = s.active_b_jump_timer;
 
-        // Copy giá trị trực tiếp không sinh rác
         c.frozen.lo = s.frozen_lo;
         c.frozen.hi = s.frozen_hi;
 
@@ -841,13 +833,11 @@
             if (next.active_b_jump_timer === 0) next.active_b_jump_sq = -1;
         }
 
-        // Đếm ngược hồi chiêu Mana (tối đa 6 half-moves = 3 turns)
         if (next.mana_w_freeze > 0) next.mana_w_freeze--;
         if (next.mana_w_jump > 0) next.mana_w_jump--;
         if (next.mana_b_freeze > 0) next.mana_b_freeze--;
         if (next.mana_b_jump > 0) next.mana_b_jump--;
 
-        // Đồng bộ dữ liệu
         next.active_spells.w_frozen_sq = next.active_w_frozen_sq;
         next.active_spells.w_frozen_timer = next.active_w_frozen_timer;
         next.active_spells.b_frozen_sq = next.active_b_frozen_sq;
@@ -2520,7 +2510,7 @@
         s.turn = (tokens[1] === 'b') ? BLACK : WHITE;
 
         var wK_sq = -1, bK_sq = -1;
-        let wR_sqs = [], bR_sqs = []; // Tự động dò tìm tất cả vị trí Xe
+        let wR_sqs = [], bR_sqs = [];
         
         for (var i = 0; i < 64; i++) {
             if (s.board[i] === ((WHITE << 3) | KING)) wK_sq = i;
@@ -3311,7 +3301,7 @@ return {
                     nag = parsed.nag;
                     clean_san = parsed.clean;
                 }
-                known_san = null; // BẮT BUỘC null để engine tự chuẩn hoá Qd1d4 thành Qxd4 và dọn sạch dấu
+                known_san = null;
                 
                 if (baseState.gameMode === 'duck') {
                     if (clean_san && clean_san.includes(',')) {
@@ -3378,11 +3368,9 @@ return {
                 return null; 
             }
             
-            // --- KHỐI LỆNH GẮN VỊT CHỐNG LỖI ---
             if (baseState.gameMode === 'duck') {
                 if (explicit_duck !== -1) {
                     let nextTemp = apply_standard_move(baseState, m);
-                    // Nếu ô vịt đã bị chiếm (Lỗi PGN), tự động lấy ô trống đầu tiên làm Fallback
                     if (nextTemp.board[explicit_duck] !== -1 && explicit_duck !== baseState.duck_sq) {
                         explicit_duck = -1;
                         for (let sq = 0; sq < 64; sq++) {
@@ -3398,10 +3386,8 @@ return {
                     m = (m & 0x3FFFFF) | (duckToUse << 22);
                 }
             }
-            // ------------------------------------
             
-            var ret = to_obj(baseState, m, nag, null); // known_san = null để kích hoạt get_san
-            
+            var ret = to_obj(baseState, m, nag, null);
             if (isSpellMove) {
                 ret.isSpell = true;
                 ret.spellType = o.spellType;
@@ -3662,6 +3648,25 @@ return {
     };
 };
 
-if (typeof exports !== 'undefined') exports.Chess = Chess;
-if (typeof module !== 'undefined' && module.exports) module.exports = Chess;
-if (typeof window !== 'undefined') window.Chess = Chess;
+// ==========================================
+// UNIVERSAL EXPORT (ES5 Global + CommonJS + ES6 Module)
+// ==========================================
+if (typeof exports !== 'undefined') {
+    exports.Chess = Chess;
+    exports.VARIANT_STARTING_FENS = VARIANT_STARTING_FENS;
+}
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Chess, VARIANT_STARTING_FENS };
+    module.exports.Chess = Chess;
+}
+if (typeof window !== 'undefined') {
+    window.Chess = Chess;
+    window.VARIANT_STARTING_FENS = VARIANT_STARTING_FENS;
+}
+if (typeof globalThis !== 'undefined') {
+    globalThis.Chess = Chess;
+    globalThis.VARIANT_STARTING_FENS = VARIANT_STARTING_FENS;
+}
+
+export { Chess, VARIANT_STARTING_FENS };
+export default Chess;
