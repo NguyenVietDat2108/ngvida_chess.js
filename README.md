@@ -14,6 +14,14 @@ The project is strictly divided into 5 independent modules. You only import what
 4. **`ngvida_chess_pgn.js` (Headless PGN Parser):** A fast PGN parser using `Int32Array` tokenization. Converts PGN strings to `MoveNode` trees and vice versa.
 5. **`ngvida_chessboard.js` (UI Controller):** A modern, zero-dependency (No jQuery), mobile-first virtual board using Pointer Events and CSS Grid.
 
+## 📚 Full Documentation
+
+Click the links below to read the detailed API reference for each independent module:
+
+* ⚙️ [**`ngvida_chess.js`** (Core Engine API) — Bitboards, Moves, Variants](./ngvida_chess.js_README.md)
+* 🌳 [**`ngvida_chess_pgn.js`** (PGN Parser) — Telemetry, DAG, Variations](./ngvida_chess_pgn_README.md)
+* 🧩 [**`constants.js`** & **`MoveNode.js`** — Configurations & Data Structures](./constants_README.md)
+
 ## 🚀 Supported Variants (14 Modes)
 `classical`, `chess960`, `3check`, `antichess`, `atomic`, `bughouse`, `chaturanga`, `crazyhouse`, `duck`, `horde`, `kingofthehill`, `racingkings`, `alice`, and `spell`.
 
