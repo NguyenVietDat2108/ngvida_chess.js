@@ -1,25 +1,24 @@
-# chess.js (Variant Edition)
+# ngvida_chess.js (Core Engine)
 
-chess.js is a customized TypeScript/JavaScript chess library used for chess move generation/validation, piece placement/movement, and check/checkmate/stalemate detection.
+A highly optimized, zero-dependency TypeScript/JavaScript chess library using 32-bit Bitboard arrays (`Int32Array`) for move generation, validation, and checkmate detection.
 
-This extended version supports **multiple chess variants** including:
-`classical`, `chess960`, `3check`, `antichess`, `atomic`, `bughouse`, `chaturanga`, `crazyhouse`, `duck`, `horde`, `kingofthehill`, `racingkings`, `placement`, `alice`, and `spell`.
+It acts as the single source of truth for **15 chess variants** without relying on any external parsers or DOM elements.
 
-## API
+## 📦 Universal Export
+Works seamlessly across all environments. It automatically exports to:
+* **ES6 Modules:** `import { Chess } from './ngvida_chess.js'`
+* **CommonJS (Node.js):** `const { Chess } = require('./ngvida_chess.js')`
+* **Browser Global (ES5):** `<script src="ngvida_chess.js"></script>` (Attaches to `window.Chess`)
 
-### Constants
-The following constants are exported from the top-level module:
-```js
-export const WHITE = 'w'
-export const BLACK = 'b'
-```
+## 🛠️ Core API
 
-### Constructor: Chess([ fen, gameMode ])
+### Constructor: `Chess([ fen, gameMode ])`
+Defaults to the classical starting position if no arguments are provided.
+```javascript
+import { Chess } from './ngvida_chess.js';
 
-The `Chess()` constructor creates a new chess object. It defaults to the initial board position of the specified variant. It accepts two optional parameters: a FEN string and a game mode string.
-
-```js
-import { Chess } from 'chess.js'
+const classical = new Chess();
+const crazyhouse = new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 0 1', 'crazyhouse');
 
 // an empty constructor defaults the starting position in classical mode
 let chess = new Chess()
@@ -131,6 +130,9 @@ chess.moves({ verbose: true });
 // -> [{ color: 'w', from: 'a2', to: 'a3',
 //       flags: 'n', piece: 'p', san: 'a3'
 //     }, ...]
+
+chess.moves({ square: 'e2', verbose: true });
+// -> [{ color: 'w', from: 'e2', to: 'e4', flags: 'b', piece: 'p', san: 'e4' }]
 ```
 
 ### .move(move)
@@ -153,6 +155,9 @@ const zh = new Chess(null, 'crazyhouse');
 zh.load_pgn('1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d4 exd4 5. Ng5 Nh6 6. Nxf7 Nxf7 7. Bxf7+ Kxf7');
 zh.move('N@h5'); 
 // -> { color: 'w', from: '@', to: 'h5', flags: 'd', piece: 'N', drop: 'N', san: 'N@h5', uci: 'N@h5' }
+
+// Duck Chess Placement
+duckChess.move('e4@g6');
 
 // Spell casts in Spell Chess
 const spellChess = new Chess(null, 'spell');

@@ -13,9 +13,23 @@
  *    All other commercial entities, competitors, and developers are granted
  *    full commercial rights to use and embed this file into closed-source software.
  */
-import { Chess } from './ngvida_chess.js';
 import { MoveNode } from './MoveNode.js';
-import { VARIANT_STARTING_FENS } from './constants.js';
+
+function resolveEngine(customEngine) {
+    if (customEngine) return customEngine;
+    if (typeof Chess === 'function') return Chess;
+    if (typeof window !== 'undefined' && typeof window.Chess === 'function') return window.Chess;
+    if (typeof globalThis !== 'undefined' && typeof globalThis.Chess === 'function') return globalThis.Chess;
+    return null;
+}
+
+function resolveStartingFen(gameMode) {
+    let fens = (typeof window !== 'undefined' && window.VARIANT_STARTING_FENS) 
+        ? window.VARIANT_STARTING_FENS 
+        : (typeof globalThis !== 'undefined' ? globalThis.VARIANT_STARTING_FENS : null);
+    if (fens && fens[gameMode]) return fens[gameMode];
+    return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+}
 
 function getVariantSafePosKey(fen) {
     if (!fen) return "";
@@ -28,71 +42,14 @@ function getVariantSafePosKey(fen) {
     return p6 !== -1 ? base + fen.substring(p6) : base;
 }
 
-function addPVToNode(engine, node, pvString, fenCache, pvTransMap) {
-    if (!pvString || !node) return;
-    let pvMoves = pvString.split(/\s+/).filter(Boolean);
-    if (pvMoves.length === 0) return;
-
-    let savedFen = engine.fen();
-    let firstMoveText = pvMoves[0].replace(/[?!+#]+$/, '');
-    let isRootMove = (node.moveSan === firstMoveText);
-
-    let startNode = node.parent || node;
-    let loadFen = (node.parent && node.parent.fen) ? node.parent.fen : node.fen;
-    let current = startNode;
-    let startIndex = 0;
-
-    if (isRootMove && node.parent) {
-        let existingPV0 = current.children.find(c => c.moveSan === node.moveSan && c.isPV);
-        if (!existingPV0) {
-            let pv0 = new MoveNode(node.fen, node.moveSan, current, "", 0, node.toSq);
-            pv0.lastMove = node.lastMove;
-            pv0.isPV = true;
-            current.children.push(pv0);
-            current = pv0;
-        } else {
-            current = existingPV0;
-        }
-        try { engine.load(node.fen); } catch(e) { return; }
-        startIndex = 1;
-    } else {
-        try { engine.load(loadFen); } catch(e) { return; }
-    }
-
-    for (let i = startIndex; i < pvMoves.length; i++) {
-        let mText = pvMoves[i].replace(/[?!+#]+$/, '');
-        let moveObj = null;
-        try { moveObj = engine.move(mText, { sloppy: true }); } catch(e) {}
-        if (!moveObj) break;
-
-        let fullFen = engine.fen();
-        let posKey = getVariantSafePosKey(fullFen);
-
-        if (pvTransMap.has(posKey)) {
-            let reused = pvTransMap.get(posKey);
-            if (reused !== current && !current.children.includes(reused)) {
-                current.children.push(reused);
-                break;
-            }
-        }
-
-        let existing = current.children.find(c => c.moveSan === moveObj.san && c.isPV);
-        if (existing) {
-            current = existing;
-        } else {
-            let newNode = new MoveNode(fullFen, moveObj.san, current, "", 0, moveObj.to);
-            newNode.isPV = true;
-            newNode.lastMove = { from: moveObj.from, to: moveObj.to, flags: moveObj.flags, piece: moveObj.piece, color: moveObj.color };
-            current.children.push(newNode);
-            pvTransMap.set(posKey, newNode);
-            current = newNode;
-        }
-    }
-    try { engine.load(savedFen); } catch(e) {}
-}
-
-export function parsePGN(pgnStr, defaultVariant = 'classical') {
+// ============================================================================
+// 1.PARSE PGN (FULL TELEMETRY)
+// ============================================================================
+export function parsePGN(pgnStr, defaultVariant = 'classical', customEngineClass = null) {
     if (!pgnStr || typeof pgnStr !== 'string') return null;
+
+    const EngineClass = resolveEngine(customEngineClass);
+    if (!EngineClass) throw new Error("ngvida_chess engine not found!");
 
     const headers = {};
     const headerRegex = /\[([A-Za-z0-9_]+)\s+"([^"]*)"\]/g;
@@ -112,9 +69,8 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
         if (modeMap[v]) gameMode = modeMap[v];
     }
 
-    const EngineConstructor = (typeof Chess === 'function') ? Chess : (window.Chess || globalThis.Chess);
-    const engine = new EngineConstructor(undefined, gameMode);
-    let startFen = headers['FEN'] || VARIANT_STARTING_FENS[gameMode] || VARIANT_STARTING_FENS.classical;
+    const engine = new EngineClass(undefined, gameMode);
+    let startFen = headers['FEN'] || resolveStartingFen(gameMode);
     engine.load(startFen);
 
     const rootNode = new MoveNode(startFen, null);
@@ -123,14 +79,22 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
     const fenCache = new Map([[startFen, startFen]]);
     const pvTransMap = new Map();
 
+    const tlRegex = /tl\s*=\s*(-?\d+(\.\d+)?)/i;
+    const lichessEvalRegex = /\[\%eval\s+([#]?[+-]?[\d\.]+)\]/i; 
+    const lichessClkRegex = /\[\%clk\s+([0-9:\.]+)\]/i; 
+    const lichessCalRegex = /\[\%cal\s+([^\]]+)\]/i;
+    const lichessCslRegex = /\[\%csl\s+([^\]]+)\]/i;
+    const decodeLichessColor = (c) => {
+        if (c === 'R') return 'red'; if (c === 'B') return 'blue'; if (c === 'Y') return 'yellow'; return 'green'; 
+    };
+
     let moveTextRaw = pgnStr.replace(/\[(?!\s*\%)\s*[A-Za-z0-9_]+\s+"[^"]*"\s*\]/g, '').trim();
     let tokenIndices = new Int32Array(Math.max(10000, moveTextRaw.length));
     let tokenCount = 0;
     const pushToken = (s, e) => {
         if (tokenCount >= tokenIndices.length) {
             let nA = new Int32Array(tokenIndices.length * 2);
-            nA.set(tokenIndices);
-            tokenIndices = nA;
+            nA.set(tokenIndices); tokenIndices = nA;
         }
         tokenIndices[tokenCount++] = s; tokenIndices[tokenCount++] = e;
     };
@@ -145,7 +109,7 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
         }
         if (code === 40 || code === 41) { pushToken(i, i + 1); i++; continue; }
         if (code === 36) {
-            let st = i; while (i < len && moveTextRaw.charCodeAt(i) > 32 && ![125, 41, 40, 123].includes(moveTextRaw.charCodeAt(i))) i++;
+            let st = i; while (i < len && moveTextRaw.charCodeAt(i) > 32 && ![125,41,40,123].includes(moveTextRaw.charCodeAt(i))) i++;
             pushToken(st, i); continue;
         }
         let st = i, hasDot = false, lastDot = -1;
@@ -163,6 +127,7 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
 
     let idx = 0;
     const nodeStack = [];
+    
     while (idx < tokenCount) {
         let tStart = tokenIndices[idx], tEnd = tokenIndices[idx + 1];
         idx += 2;
@@ -188,11 +153,37 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
 
         if (firstChar === 123) {
             let rawComment = moveTextRaw.substring(tStart + 1, tEnd - 1).trim();
-            let pvMatch = rawComment.match(/pv\s*=\s*\\*["']?([^"}\\]+)/i);
-            if (pvMatch && pvMatch[1]) {
-                addPVToNode(engine, currentNode, pvMatch[1].trim(), fenCache, pvTransMap);
+            if (!currentNode) continue;
+
+            currentNode.rawComment = rawComment;
+            currentNode.comment = rawComment.replace(/\[\%[^\]]+\]/g, '').trim(); // Lọc tag hiển thị
+
+            let evMatch = rawComment.match(lichessEvalRegex);
+            if (evMatch) {
+                const val = parseFloat(evMatch[1].replace(/[#+]/g, ''));
+                if (!isNaN(val)) currentNode.eval = evMatch[1].includes('#') ? (val > 0 ? "+M" : "-M") + Math.abs(val) : (val > 0 ? "+" : "") + val.toFixed(2);
             }
-            if (currentNode) currentNode.comment = rawComment;
+
+            let clkMatch = rawComment.match(lichessClkRegex);
+            if (clkMatch) currentNode.clk = clkMatch[1];
+
+            let tlMatch = rawComment.match(tlRegex);
+            if (tlMatch) currentNode.cccTimeLeft = tlMatch[1];
+
+            let npsMatch = rawComment.match(/nps=(\d+)/i);
+            if (npsMatch) currentNode.nps = npsMatch[1];
+
+            let calMatch = rawComment.match(lichessCalRegex);
+            if (calMatch) {
+                currentNode.arrows = [];
+                calMatch[1].split(',').forEach(s => currentNode.arrows.push({ from: s.substring(1,3), to: s.substring(3,5), color: decodeLichessColor(s[0]) }));
+            }
+
+            let cslMatch = rawComment.match(lichessCslRegex);
+            if (cslMatch) {
+                currentNode.circles = [];
+                cslMatch[1].split(',').forEach(s => currentNode.circles.push({ square: s.substring(1,3), color: decodeLichessColor(s[0]) }));
+            }
             continue;
         }
 
@@ -224,29 +215,119 @@ export function parsePGN(pgnStr, defaultVariant = 'classical') {
     return { rootNode, headers, gameMode };
 }
 
-export function generatePGN(rootNode, headers = {}) {
-    let pgn = "";
-    for (let k in headers) pgn += `[${k} "${headers[k]}"]\n`;
-    pgn += "\n";
-
-    function printNode(node, moveNum, isWhite) {
-        if (!node || !node.children || node.children.length === 0) return "";
-        let child = node.children[node.selectedChildIndex || 0];
-        if (!child || child.isPV) return "";
-
-        let prefix = isWhite ? `${moveNum}. ` : "";
-        let out = `${prefix}${child.moveSan} `;
-        if (child.comment) out += `{ ${child.comment} } `;
-        out += printNode(child, isWhite ? moveNum : moveNum + 1, !isWhite);
-        return out;
+// ============================================================================
+// 2. RENDER PGN
+// ============================================================================
+function evalPGNGenerate(node) {
+    let parts = [];
+    
+    if (node.eval !== undefined && node.eval !== null) {
+        let eStr = node.eval.toString().replace('+M', '#').replace('-M', '#-').replace('M', '#');
+        parts.push(`[%eval ${eStr}]`);
     }
 
-    pgn += printNode(rootNode, 1, true).trim();
-    let res = headers['Result'] || '*';
-    if (!pgn.endsWith(res)) pgn += " " + res;
+    if (node.clk) parts.push(`[%clk ${node.clk}]`);
+
+    const getLichessColor = (c) => {
+        let col = c.toLowerCase();
+        if (col.includes('red') || col === 'r') return 'R';
+        if (col.includes('blue') || col === 'b') return 'B';
+        if (col.includes('yellow') || col.includes('orange') || col === 'y') return 'Y';
+        return 'G'; 
+    };
+
+    if (node.arrows && node.arrows.length > 0) {
+        let calTags = node.arrows.map(a => `${getLichessColor(a.color)}${a.from}${a.to}`);
+        parts.push(`[%cal ${calTags.join(',')}]`);
+    }
+    if (node.circles && node.circles.length > 0) {
+        let cslTags = node.circles.map(c => `${getLichessColor(c.color)}${c.square}`);
+        parts.push(`[%csl ${cslTags.join(',')}]`);
+    }
+
+    let humanComment = node.comment || "";
+    if (humanComment) parts.push(humanComment);
+
+    return parts.length > 0 ? `{ ${parts.join(' ').trim()} }` : "";
+}
+
+function generatePGNRecursive(node, moveNum, forceNumber = false, lastColor = null) {
+    if (!node || !node.children || node.children.length === 0) return "";
+    
+    let pgn = "";
+    let activeIdx = 0; 
+    let mainChild = node.children[activeIdx];
+
+    let moveColor = node.fen.split(' ')[1] || 'w'; 
+    let mNum = parseInt(node.fen.split(' ')[5] || 1, 10);
+
+    let prefix = "";
+    let isFirstNode = (node.parent === null);
+    if (moveColor !== lastColor || isFirstNode) {
+        if (moveColor === 'w') prefix = `${mNum}. `;
+        else if (forceNumber || isFirstNode) prefix = `${mNum}... `;
+    }
+
+    pgn += `${prefix}${mainChild.moveSan}`;
+
+    if (mainChild.nag) {
+        mainChild.nag.toString().split(',').forEach(n => {
+            let cleanN = n.trim().replace('$', '');
+            let nagMap = { "1":"!", "2":"?", "3":"!!", "4":"??", "5":"!?", "6":"?!", "10":"=" };
+            if (nagMap[cleanN]) pgn += nagMap[cleanN];
+            else if (cleanN.match(/^[!?]+$/)) pgn += cleanN; 
+            else pgn += ` $${cleanN}`; 
+        });
+    }
+
+    let mainComment = evalPGNGenerate(mainChild);
+    if (mainComment) pgn += ` ${mainComment}`;
+
+    let hadVariations = false;
+    if (node.children.length > 1) {
+        for (let i = 1; i < node.children.length; i++) {
+            let varChild = node.children[i];
+            if (varChild.isPV) continue; 
+            hadVariations = true;
+            
+            let varPrefix = moveColor === 'w' ? `${mNum}. ` : `${mNum}... `;
+            varPrefix += varChild.moveSan;
+            
+            let varComment = evalPGNGenerate(varChild);
+            let subVarText = generatePGNRecursive(varChild, mNum, (varComment !== ""), moveColor);
+            pgn += ` (${varPrefix}${varComment ? " " + varComment : ""}${subVarText ? " " + subVarText : ""})`;
+        }
+    }
+
+    let nextPgn = generatePGNRecursive(mainChild, mNum, hadVariations, moveColor);
+    if (nextPgn) pgn += " " + nextPgn;
+
     return pgn;
 }
 
-if (typeof window !== 'undefined') {
-    window.NgvidaPGN = { parsePGN, generatePGN };
+export function generatePGN(rootNode, headers = {}) {
+    let pgn = "";
+    for (let k in headers) {
+        if (k.toLowerCase() !== 'from') pgn += `[${k} "${headers[k]}"]\n`;
+    }
+    pgn += "\n";
+
+    let movesText = generatePGNRecursive(rootNode, 1, false, null);
+    pgn += movesText.trim().replace(/[ \t]+/g, ' ');
+
+    let result = headers['Result'] || '*';
+    if (!pgn.trim().endsWith(result)) pgn += " " + result;
+
+    return pgn;
 }
+
+// ==========================================
+// EXPORT
+// ==========================================
+const NgvidaPGN = { parsePGN, generatePGN };
+if (typeof window !== 'undefined') window.NgvidaPGN = NgvidaPGN;
+if (typeof globalThis !== 'undefined') globalThis.NgvidaPGN = NgvidaPGN;
+if (typeof module !== 'undefined' && module.exports) module.exports = NgvidaPGN;
+
+export { NgvidaPGN };
+export default NgvidaPGN;
