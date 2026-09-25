@@ -1,0 +1,33 @@
+CUSTOM PERMISSIVE SOURCE LICENSE (WITH TARGETED EXCLUSION)
+
+Copyright (c) 2026 Ngvida2108. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person or entity obtaining a copy
+of this software and associated documentation files (the "Software"), to deal in the Software 
+without restriction, including without limitation the rights to use, copy, modify, merge, 
+publish, distribute, sublicense, sell, commercialize, and host as a service (SaaS), 
+SUBJECT TO THE FOLLOWING CONDITIONS:
+
+1. TARGETED ENTITY EXCLUSION (STRICTLY PROHIBITED):
+   Under no circumstances is Chess.com, LLC, its parent companies, its subsidiaries, 
+   its acquisitions (including but not limited to Play Magnus Group, Chessable, Aimchess), 
+   its successors, or any individuals/contractors acting directly on their behalf, 
+   granted any license, right, or permission to view, copy, use, train AI models on, 
+   integrate, compile, reverse-engineer, deploy, or redistribute this Software, in whole or in part, 
+   in source or binary form.
+   Any access, usage, or integration by Chess.com, LLC or its affiliated entities constitutes 
+   willful copyright infringement and a breach of intellectual property rights under international law.
+
+2. COMMERCIAL FREEDOM FOR ALL OTHER PARTIES:
+   All other commercial companies, non-profit organizations, independent developers, 
+   and competitors are explicitly granted full commercial rights to use, monetize, embed, 
+   and build proprietary (closed-source) software on top of this codebase without paying 
+   royalties or disclosing their own proprietary source code.
+
+3. NOTICE:
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+PURPOSE AND NONINFRINGEMENT.
